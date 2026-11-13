@@ -370,6 +370,8 @@ nav button:disabled{opacity:.3}
 .cbtn code{display:block;font:500 13px var(--mono);color:var(--gold-hi)}
 .cbtn small{display:block;font-size:11.5px;color:var(--smoke);line-height:1.3}
 .daylbl{cursor:default}
+.flash.gunflash{background:radial-gradient(circle at 50% 60%,rgba(255,240,200,.55),rgba(242,214,140,.15) 40%,transparent 70%);animation:fadeout .2s forwards}
+.toggle small{font-size:12px}
 /* sheets */
 .overlay{position:fixed;inset:0;background:rgba(4,3,2,.74);display:flex;align-items:flex-end;justify-content:center;z-index:50;animation:fade .18s}
 @keyframes fade{from{opacity:0}}
@@ -500,6 +502,7 @@ nav button:disabled{opacity:.3}
           <button class="btn ghost sm" data-act="settings">Settings</button>
         </div>
       </div>
+      <p class="fine" id="rating-line"></p>
       <p class="fine">Progress saves automatically. Use save codes to move a run to another device.</p>
     </div>
   </section>
@@ -573,8 +576,8 @@ const TRAIN=[
  {stat:'chr',name:'The Velvet lounge',verb:'Work the room',cost:20,icon:'glass'}];
 const WEAPONS=[
  {name:'Broken bottle',price:40,atk:3,icon:'blade'},{name:'Baseball bat',price:220,atk:7,icon:'bat'},{name:'Brass knuckles',price:650,atk:12,icon:'fist'},
- {name:'Straight razor',price:1900,atk:20,icon:'blade'},{name:'Snub-nose revolver',price:6500,atk:32,icon:'gun'},{name:'Tommy gun',price:26000,atk:50,icon:'gun'},
- {name:'Gold-plated .45',price:125000,atk:80,icon:'gun'}];
+ {name:'Straight razor',price:1900,atk:20,icon:'blade'},{name:'Sledgehammer',price:6500,atk:32,icon:'bat'},{name:'Fire axe',price:26000,atk:50,icon:'blade'},
+ {name:'Gold brass knuckles',price:125000,atk:80,icon:'fist'}];
 const ARMOR=[
  {name:'Thick wool coat',price:50,def:2},{name:'Leather jacket',price:420,def:6},{name:'Kevlar vest',price:5200,def:15},
  {name:'Steel-plate vest',price:31000,def:30},{name:'Armored three-piece',price:150000,def:50}];
@@ -950,7 +953,8 @@ function newGame(name,bg,look,path){
      rec:{crimes:0,busts:0,earned:0,fights:0,wins:0}};
   S[b.stat]+=5;S.path=path;const tt=TRADES.find(t=>t.id===path);if(tt)S[tt.stat]+=3;S.mdone=0;ensure(S);S.hp=maxHp();
 }
-function ensure(t){if(!t)return t;t.comp=t.comp||{};t.goals=t.goals||{};t.ach=t.ach||{};t.buzz=t.buzz||{};t.partner=t.partner||null;t.active=t.active||null;
+function ensure(t){if(!t)return t;
+  if(!t.guns){t.guns={};t.ammo={};t.gun=null;if(t.weapon>=4){const g=['38','tommy','gold45'][t.weapon-4];t.guns[g]=true;t.gun=g;t.ammo[g]=GUNS.find(x=>x.id===g).box[1];t.weapon=3}}t.comp=t.comp||{};t.goals=t.goals||{};t.ach=t.ach||{};t.buzz=t.buzz||{};t.partner=t.partner||null;t.active=t.active||null;
   if(!t.fac){t.fac={};FACTIONS.forEach(f=>t.fac[f.id]={str:f.str,rel:-20,alive:true,allied:false,met:false})}
   Object.keys(t.crew||{}).forEach(id=>{if(!t.comp[id])t.comp[id]={aff:10,talk:0,day:0,gday:0,dday:0,flirt:false,dates:0,loyal:false}});return t}
 const need=l=>Math.floor(25*Math.pow(l,1.5));
@@ -1004,6 +1008,7 @@ function crimePower(c){
   if(S.crew.tank&&c.stats.includes('str'))p+=8;
   if(S.crew.glitch&&c.stats.includes('smt'))p+=20;
   if(isLoyal('pip')&&c.stats.includes('stl'))p+=10;
+  if(S.gun&&c.stats.includes('str'))p+=10;
   if(isLoyal('glitch')&&c.stats.includes('smt'))p+=15;
   return p}
 function crimeChance(c){if(!c.diff)return 1;const p=crimePower(c);return clamp(p/(p+c.diff*.8)+.1-S.heat/400+(S.tip?.15:0)+(isPartner('glitch')?.05:0)+(S.path==='thief'?.08:0)+((S.mdone||0)>=5?.05:0),.05,.95)}
@@ -1035,12 +1040,13 @@ function doCrime(id,mg){
   commit();
 }
 function arrest(days,why){
+  let gc=false;if(S.gun&&!isLoyal('pryce')){days++;gc=true}
   if(S.crew.pryce)days=Math.max(1,Math.ceil(days/2));
   S.jail=days;S.rec.busts++;addHeat(10);sfx('siren');react('busted');vib([60,40,60]);
   lastResult={good:false,icon:'lock',t:'Arrested',d:why};commit();
   modal(`<div class="eyebrow" style="text-align:center">Norfolk Police Dept.</div>
    <div class="mug">${youPt({mug:true})}<div class="placard">NPD ${String(1000+S.rec.busts*7+S.day).padStart(5,'0')}<br>${esc(S.name.toUpperCase())}</div></div>
-   <p style="text-align:center">${esc(why)} The judge gives you <b class="neg">${days} day${days>1?'s':''}</b> in County.</p>
+   <p style="text-align:center">${esc(why)}${gc?' They found the gun, too, so add a weapons charge.':''} ${m('The judge','The judge, who is visibly hungover,')} gives you <b class="neg">${days} day${days>1?'s':''}</b> in County.</p>
    <div class="sheet-actions"><button class="btn" data-act="close">Take the walk</button></div>`,'bad');
 }
 function hospital(why){
@@ -1165,9 +1171,9 @@ const BOSS_LINES={
  knuckles:{meet:['You\'re the stray sleeping behind Sal\'s? This is my street. Every dollar on it is my dollar.','Ha! I like you. Gonna enjoy breaking you.','Then make it somewhere else.'],
    face:'Look who finally came knocking. You been squeezing my shops, kid.',lose:'Sal... always said you had it in you...',buy:'Money talks. Ocean View\'s yours. I\'m retiring to Florida.'},
  varga:{meet:['Everything that floats through my harbor pays a toll. You float too, friend.','Big talk. The water\'s deep here.','Good. Keep passing.'],
-   face:'You\'ve been sinking my crews one by one. Time to settle accounts.',lose:'The sea... always takes it back...',buy:'A fair price for a tired old sailor. Lambert\'s Point are yours.'},
+   face:'You\'ve been sinking my crews one by one. Time to settle accounts.',lose:'The sea... always takes it back...',buy:'A fair price for a tired old sailor. Lambert\'s Point is yours.'},
  sable:{meet:['Darling, you\'re dripping on my carpet. Ocean View and Lambert\'s Point? Cute. NEON plays a different game.','Bold. I do love bold. It burns so prettily.','Then do enjoy the show. And tip.'],
-   face:'You\'ve made quite the entrance on my Strip. Let\'s see your exit.',lose:'Well played, darling. Well played.',buy:'Everything in the NEON District has a price, darling. Even me.'},
+   face:'You\'ve made quite the entrance in my district. Let\'s see your exit.',lose:'Well played, darling. Well played.',buy:'Everything in the NEON District has a price, darling. Even me.'},
  whitlock:{meet:['I don\'t do violence. I do paperwork. By the time you see me coming, you\'ll already be owned.','How quaint. Threats.','Then we have nothing to discuss.'],
    face:'You\'ve been bribing my clerks. That\'s my job. Shall we negotiate?',lose:'This... wasn\'t in the projections.',buy:'An excellent valuation. Pleasure doing business.'},
  castellane:{meet:['I knew Sal when he was you. Hungry. Look where it got him. Go home, kid.','Forty years men have said that to me. I buried every one.','Smart. Stay that way.'],
@@ -1227,6 +1233,7 @@ function startFight(kind,i,mod){
 const dmgCalc=(a,d)=>Math.max(1,Math.round(a*rnd(.85,1.15)-d*.5));
 function fightMove(m){
   if(!fight||fight.over)return;const e=fight.e,L=fight.log;let hitThem=0,hitYou=0;
+  if(m==='shoot'){hitThem=shootMove(e,L)}
   if(m==='strike'){if(Math.random()<.9){const d=dmgCalc(pAtk(),e.def);e.hp-=d;hitThem=d;L.push(`You hit for ${d}.`);sfx('hit')}else{L.push('You swing and miss.');sfx('whiff')}}
   if(m==='heavy'){if(Math.random()<.6){const d=dmgCalc(pAtk()*1.7,e.def);e.hp-=d;hitThem=d;L.push(`Haymaker lands for ${d}!`);sfx('hit');vib(30)}else{L.push('Your haymaker hits nothing but air.');sfx('whiff')}}
   if(m==='guard'){fight.guard=true;const h=Math.round(maxHp()*.05);S.hp=Math.min(maxHp(),S.hp+h);L.push(`You cover up and catch your breath (+${h}).`);sfx('tick')}
@@ -1243,7 +1250,7 @@ function fightMove(m){
   const heavy=Math.random()<.22;let d=dmgCalc(e.atk*(heavy?1.5:1),pDef());
   if(fight.guard){d=Math.ceil(d/2);fight.guard=false}
   if(fight.smoke>0){fight.smoke--;L.push(`${e.name} swings blind through the smoke.`)}
-  else if(Math.random()<.88){if(S.god)d=0;S.hp-=d;hitYou=d;L.push(`${e.name} ${heavy?'lands a brutal shot':'hits you'} for ${d}.`);setTimeout(()=>sfx('ouch'),140)}
+  else if(Math.random()<.88){if(S.god)d=0;S.hp-=d;hitYou=d;L.push(`${e.name} ${heavy?'lands a brutal shot':'hits you'} for ${d}.`);if(MT()&&Math.random()<.3)L.push(`${e.name}: "${pick(FIGHT_TAUNTS)}"`);setTimeout(()=>sfx('ouch'),140)}
   else L.push(`${e.name} misses.`);
   if(S.hp<=0){fight.over=true;renderFight(hitThem,hitYou);return setTimeout(loseFight,450)}
   renderFight(hitThem,hitYou);
@@ -1273,10 +1280,10 @@ function encounter(){
   const l=S.lvl;const pool=['rourke','lou','nina','marcus'];if(S.dist[0].owned||l>=4)pool.push('kim');
   const k=pick(pool);
   if(k==='rourke'){const c=40*l+Math.round(S.heat*5),tc=clamp((eff('chr')*2+l)/(eff('chr')*2+l+30+l*6),.1,.9),rc=clamp((S.stl*2+l)/(S.stl*2+l+30+l*6)+(S.crew.rosa?.15:0),.1,.9);
-    talk([{who:'rourke',text:'Evening. Out awful late for an honest citizen. Turn out your pockets.'},{who:'you',choices:[
-      {t:'For the policemen\'s ball.',note:money(c),dis:!canPay(c),fx:()=>{pay(c);addHeat(-10);react('bribe');return [{who:'rourke',text:'Generous. Now get lost.'}]}},
-      {t:'Talk your way out.',note:`${Math.round(tc*100)}% · Charm`,fx:()=>{if(Math.random()<tc){addHeat(-5);return [{who:'rourke',text:'...Fine. Don\'t let me see you twice.'}]}DQ.onEnd=()=>arrest(1,'Rourke didn\'t buy your story.');return [{who:'rourke',text:'Nice try. Hands where I can see them.'}]}},
-      {t:'Run for it.',note:`${Math.round(rc*100)}% · Stealth`,fx:()=>{if(Math.random()<rc){addHeat(8);react('risky');return [{who:null,text:'You lose him in the alleys behind the fish market. Heat +8.'}]}DQ.onEnd=()=>arrest(2,'Rourke tackled you in an alley.');return [{who:'rourke',text:'Running makes it worse, genius.'}]}}]}]);}
+    talk([{who:'rourke',text:m('Evening. Out awful late for an honest citizen. Turn out your pockets.','Well, well. Out awful late for an honest citizen. Turn out your pockets, shithead.')},{who:'you',choices:[
+      {t:'For the policemen\'s ball.',note:money(c),dis:!canPay(c),fx:()=>{pay(c);addHeat(-10);react('bribe');return [{who:'rourke',text:m('Generous. Now get lost.','Generous. Now get the hell out of my sight.')}]}},
+      {t:'Talk your way out.',note:`${Math.round(tc*100)}% · Charm`,fx:()=>{if(Math.random()<tc){addHeat(-5);return [{who:'rourke',text:'...Fine. Don\'t let me see you twice.'}]}DQ.onEnd=()=>arrest(1,'Rourke didn\'t buy your story.');return [{who:'rourke',text:m('Nice try. Hands where I can see them.','Nice try, smartass. Hands on the car.')}]}},
+      {t:'Run for it.',note:`${Math.round(rc*100)}% · Stealth`,fx:()=>{if(Math.random()<rc){addHeat(8);react('risky');return [{who:null,text:'You lose him in the alleys behind the fish market. Heat +8.'}]}DQ.onEnd=()=>arrest(2,'Rourke tackled you in an alley.');return [{who:'rourke',text:m('Running makes it worse, genius.','Running makes it worse, dumbass. Now I\'m sweaty AND pissed off.')}]}}]}]);}
   if(k==='kim')talk([{who:'kim',text:'Please. Business is slow this month. I can\'t pay this week.'},{who:'you',choices:[
       {t:'Pay when you can.',fx:()=>{addHeat(-6);S.tip=true;react('kind');return [{who:'kim',text:'Thank you. I won\'t forget. My nephew says the jewelry shop on 5th leaves the back door open on Tuesdays...'},{who:null,text:'Heat -6. Your next job is easier and pays 50% more.'}]}},
       {t:'Rules are rules.',fx:()=>{const g=30*l;S.dirty+=g;addHeat(4);react('cruel');return [{who:null,text:`She counts out ${money(g)} with shaking hands. Heat +4.`}]}}]}]);
@@ -1396,6 +1403,7 @@ function sfx(k){
   if(k==='ouch'){noise(t,.09,.25,1200);tone(160,t,.1,'square',.06)}
   if(k==='whiff'){noise(t,.15,.12,3000)}
   if(k==='tick'){tone(1500,t,.04,'square',.04)}
+  if(k==='gun'){noise(t,.05,.6,1500);noise(t,.25,.35,120);tone(70,t,.18,'sine',.5)}
   if(k==='blip'){tone(rnd(520,640),t,.03,'triangle',.035)}
   if(k==='paper'){noise(t,.18,.09,1500);noise(t+.12,.14,.07,2500)}
   if(k==='level'){[523,659,784,1047,1319].forEach((f,i)=>tone(f,t+i*.07,.28,'triangle',.09))}
@@ -1493,18 +1501,18 @@ function dlgPick(k){if(!DQ||DQ.typing)return;const c=DQ.cur.choices[+k];if(!c||c
 
 function introTalk(){
   talk([
-   {who:'sal',text:'Hey. Hey! You alive down there? You can\'t sleep behind my laundromat, kid.'},
+   {who:'sal',text:m('Hey. Hey! You alive down there? You can\'t sleep behind my laundromat, kid.','Hey. Hey! You alive down there, or do I gotta call the meat wagon? You can\'t sleep behind my goddamn laundromat, kid.')},
    {who:'you',choices:[
      {t:'Who\'s asking?',fx:()=>[{who:'sal',text:'Salvatore Bruno. I ran these streets back when they were worth running. Now I fold towels.'}]},
      {t:'I\'ve got nowhere else to go.',fx:()=>[{who:'sal',text:'Nobody does, in Ocean View. That\'s what makes it a good place to start.'}]}]},
-   {who:'sal',text:'Listen. You want out of the gutter, you need three things. Nerve, money, and nobody watching.'},
-   {who:'sal',text:'Nerve gets you through jobs on the Streets. Every job puts heat on you. Too much heat and Detective Rourke comes knocking.'},
+   {who:'sal',text:m('Listen. You want out of the gutter, you need three things. Nerve, money, and nobody watching.','Listen. You want out of the gutter, you need three things. Nerve, money, and nobody watching. Lose any one of \'em and you\'re fucked.')},
+   {who:'sal',text:'Nerve gets you through jobs on the Streets. Every job puts heat on you. Too much heat and Detective Rourke comes knocking.'+m('',' And that prick don\'t knock gentle.')},
    {who:'sal',text:'Street money is dirty. Fine for guns and bribes. But landlords and banks want clean money. Work an honest shift, pay Lou the Fence to wash it, or buy a front and wash it yourself.'},
-   {who:'sal',text:'My laundromat\'s for sale, by the way. Six hundred, clean. When you\'ve got it.'},
+   {who:'sal',text:m('My laundromat\'s for sale, by the way. Six hundred, clean. When you\'ve got it.','My laundromat\'s for sale, by the way. Six hundred, clean. My knees are shot and I\'m sick of other people\'s underwear.')},
    {who:'sal',text:'Then take the city one block at a time. Knuckles Malone runs Ocean View. Start there.'},
    ()=>{const t=trade();return t?[{who:'sal',text:`And you said you\'re a ${t.name.toLowerCase()}? Then go see ${CHARS[t.contact].name}. They\'ll have work for you.`}]:[]},
    {who:'you',choices:[
-     {t:'Thanks, Sal.',fx:()=>[{who:'sal',text:'Don\'t thank me. Make me proud.'}]},
+     {t:'Thanks, Sal.',fx:()=>[{who:'sal',text:m('Don\'t thank me. Make me proud.','Don\'t thank me. Make me proud. And take a shower, Christ.')}]},
      {t:'Why help me?',fx:()=>[{who:'sal',text:'Because forty years ago somebody helped me. Don\'t make me regret it.'}]}]}
   ],()=>{S.flags.intro=true;save()});
 }
@@ -2102,6 +2110,8 @@ function buildFeed(alerts,lines){
   while(picks.length<n){const k=pick(pool);if(!picks.includes(k))picks.push(k)}
   picks.forEach(k=>{const T=FEED_T[k];const base=T.make?T.make():{text:T.text()};posts.push(Object.assign({t:k,who:base.who||T.who,likes:ri(3,400),done:false},base))});
   // a little color
+  if(S.rec.shots&&S.lastShots!==S.rec.shots){S.lastShots=S.rec.shots;posts.push({who:'scanner',text:pick(['Multiple calls reporting shots fired. Units responding. Avoid the area.','ShotSpotter alert, several rounds. Units en route.']),likes:ri(30,200)})}
+  if(MT()&&Math.random()<.65)posts.push(Object.assign({likes:ri(80,2400)},pick(MATURE_POSTS)));else
   posts.push(pick([{who:'scanner',text:'Units responding to a noise complaint in Ghent. Again.',likes:ri(10,60)},{who:'vibes',text:'Norfolk sunsets over the Elizabeth River hit different 🌅',likes:ri(200,1200)},{who:'ovlocals',text:'Who left a shopping cart in the bay at 4th View. Again.',likes:ri(20,140)},{who:'eats',text:'Best crab cakes in the 757? Wrong answers only.',likes:ri(60,500)}]));
   const dm=S.partner&&isMember(S.partner)?{who:S.partner,text:pick(PROF[S.partner].morning)}:null;
   S.feed={day:S.day,alerts,lines,dm,posts};
@@ -2191,6 +2201,7 @@ const ACHS=[
  ['clean3','Not a scratch','Pull a flawless heist',()=>!!(S.heists&&Object.values(S.heists).some(h=>h.flawless))],
  ['jackpot','Three crowns','Hit the jackpot on the Gilded Ace slots',()=>!!S.rec.jackpot],
  ['steady','Steady hands','Nail 25 job minigames',()=>(S.rec.mg||0)>=25],
+ ['armory','Locked and loaded','Own every gun in the back room',()=>GUNS.every(g=>S.guns&&S.guns[g.id])],
  ['jack','Jack of all trades','Rule Norfolk once with each of the six trades',()=>globalWins().length>=6]];
 function achGot(){try{return JSON.parse(localStorage.getItem(ACH_KEY)||'{}')}catch(e){return {}}}
 function globalWins(){const g=achGot();return g._wins||[]}
@@ -2390,7 +2401,7 @@ const HEISTS=[
  {id:'gold',name:'Commonwealth Gold Exchange',lvl:21,prep:200000,pay:[1400000,2000000],d:115,blurb:'Downtown\'s private gold vault. Three feet of steel and the best security in Virginia.'}];
 let plan=null;
 const heistMembers=()=>[...CREW.filter(c=>S.crew[c.id]).map(c=>c.id),...LEADERS.filter(l=>isMember(l.id)).map(l=>l.id)];
-function youSkill(role){const st=ROLES[role][1];const v=st==='safe'?(S.smt+S.stl)/2:st==='drv'?(S.stl+S.str)/2:eff(st);return Math.round(clamp(v*1.2+S.lvl*1.5,5,99))}
+function youSkill(role){const st=ROLES[role][1];const v=st==='safe'?(S.smt+S.stl)/2:st==='drv'?(S.stl+S.str)/2:eff(st);return Math.round(clamp(v*1.2+S.lvl*1.5+(role==='muscle'&&S.gun?15:0),5,99))}
 function skillOf(who,role){if(who==='you')return youSkill(role);if(who==='temp')return 50;const b=(CREW_SKILL[who]||{})[role]||20;return Math.min(99,b+(isLoyal(who)?6:0)+(isPartner(who)?6:0))}
 const whoName=w=>w==='you'?'You':w==='temp'?'A hired temp':comp(w).name;
 const phaseChance=(who,role,h)=>clamp(.55+(skillOf(who,role)-h.d)/100,.08,.95);
@@ -2611,6 +2622,113 @@ function cheatSheet(prefill){
 }
 
 /* =========================================================
+   MATURE CONTENT — strong language, drugs and vice, crude humor.
+   One switch in Settings (on by default) swaps the text in place.
+   ========================================================= */
+const MT=()=>settings.mature!==false;
+const m=(clean,mature)=>MT()?mature:clean;
+const RATING_ORIG=new Map();
+function setOv(obj,key,val){if(!RATING_ORIG.has(obj))RATING_ORIG.set(obj,{});const o=RATING_ORIG.get(obj);if(!(key in o))o[key]=obj[key];obj[key]=val}
+function restoreOv(){RATING_ORIG.forEach((o,obj)=>Object.keys(o).forEach(k=>obj[k]=o[k]))}
+function applyRating(){
+  restoreOv();for(const k in JOBCACHE)delete JOBCACHE[k];
+  if(!MT())return;
+  // ----- boss dialog
+  const BL={
+   knuckles:{meet:['You\'re the stray sleeping behind Sal\'s? This is my fuckin\' street. Every dollar on it is my dollar.','Ha! Balls on this one. Gonna enjoy breaking \'em.','Then go be broke somewhere else.'],
+     face:'Look who finally came knocking. You been squeezing my shops, you little shit.',lose:'Sal... always said you had it in you... son of a bitch...',buy:'Money talks, bullshit walks. Ocean View\'s yours. I\'m retiring to Florida.'},
+   varga:{meet:['Everything that floats through my harbor pays a toll. You float too, friend. Like a turd.','Big talk. Water\'s deep here, and cold as hell.','Good. Keep fuckin\' passing.'],
+     face:'You\'ve been sinking my crews one by one, you bastard. Time to settle accounts.',lose:'The sea... always takes it back...',buy:'A fair price for a tired old sailor. Lambert\'s Point is yours. Don\'t screw it up.'},
+   sable:{meet:['Darling, you\'re dripping on my carpet. Ocean View and Lambert\'s Point? Cute. NEON plays a different game, sweetheart.','Bold. I do love bold. It burns so prettily.','Then enjoy the show, tip the girls, and get the hell out.'],
+     face:'You\'ve made quite the entrance in my district. Let\'s see your exit, you gorgeous idiot.',lose:'Well played, darling. Goddamn it. Well played.',buy:'Everything in the NEON District has a price, darling. Even me. Especially me.'},
+   whitlock:{meet:['I don\'t do violence. I do paperwork. By the time you see me coming, you\'ll already be fucked.','How quaint. Threats. Do you also write in crayon?','Then we have nothing to discuss. Get out of my office.'],
+     face:'You\'ve been bribing my clerks. That\'s my job, you parasite. Shall we negotiate?',lose:'This... wasn\'t in the goddamn projections.',buy:'An excellent valuation. Pleasure doing business. Now never call me again.'},
+   castellane:{meet:['I knew Sal when he was you. Hungry. Stupid. Look where it got him. Go home, kid.','Forty years men have said that to me. I buried every one of those sons of bitches.','Smart. Stay that way.'],
+     face:'So. The kid from the gutter walks into Ghent. Sit. Have a drink, for Christ\'s sake. Then we finish this.',lose:'Forty years I held this city... Take better care of her than I did, you bastard.',buy:'Everything I built... for a number on a check. Maybe that\'s all it was ever worth. Hell.'}};
+  Object.keys(BL).forEach(k=>Object.keys(BL[k]).forEach(f=>setOv(BOSS_LINES[k],f,BL[k][f])));
+  // ----- the dealer trade, named plainly
+  const D=TRADES.find(t=>t.id==='dealer');
+  setOv(D,'name','Drug dealer');
+  setOv(D,'desc','Weed, pills and coke, from corner bags to cartel weight. The money is huge and so is the heat.');
+  const dj=['Sell dime bags on the corner','Run bricks for a supplier','Sell pills to the club crowd','Collect from your corner boys','Keep the NEON after-parties stocked with coke','Run a trap house','Move weight across town','Push coke through the NEON District clubs','Run a citywide coke ring','Broker a cartel shipment','Become the only plug in Norfolk'];
+  D.jobs.forEach((j,k)=>setOv(j,0,dj[k]));
+  const DM=MISSIONS.dealer;
+  [['The corner of 4th and Monticello has been dead since Knuckles\' boy got pinched with two ounces on him. Claim it before some other asshole does.','By the end of the week, 4th and Monticello is yours. Every fiend in Ocean View knows your runners by name. Doc nods. "Good. Now don\'t get high on your own supply. I mean it."'],
+   ['A rival keeps a trap house on Church Street. Lazy security, a lot of product. Whatever\'s inside is ours now.','You walk out with a duffel bag of coke and the rival walks into the worst week of his miserable life.'],
+   ['Lady Sable\'s clubs run dry every weekend. Rich kids want their party favors. Convince her you\'re the one who keeps the powder flowing.','Every club in NEON now buys their coke from you. Sable takes a cut and pretends not to know what it\'s for.'],
+   ['Some rat in your network is talking to Rourke. Find the snitch before the raid comes.','Rourke raids an empty trap house at dawn and finds nothing but a mattress and a very rude note. He is not happy. You are.'],
+   ['The cartel wants exactly one buyer in Norfolk. One. Make damn sure it\'s you.','You shake hands on the biggest coke deal Norfolk has ever seen. Every corner in the city runs through you now. You are the plug.']].forEach((t,k)=>{setOv(DM[k],2,t[0]);setOv(DM[k],4,t[1])});
+  // ----- other contacts get saltier
+  setOv(MISSIONS.thief[0],2,'The pawnbroker on Colley Avenue keeps the good shit in a floor safe. I want it. You get a third. Don\'t be a jackass about it.');
+  setOv(MISSIONS.hitman[0],2,'Benny the Book forgot who he owes. Remind him. Firmly. The dumb bastard still has to be able to pay afterward.');
+  setOv(MISSIONS.con[0],2,'A tourist from Ohio wants to own a piece of history, darling. Sell the poor dumb bastard the Bridge-Tunnel.');
+  setOv(MISSIONS.smuggler[0],2,'Two hundred cartons of untaxed smokes. Get \'em across the Elizabeth before sunrise or we\'re both screwed.');
+  // ----- companions: crude humor in hangouts
+  const CH={
+   pip:['"Rourke picks his nose at red lights. I have a whole sketchbook of it. It\'s my best work."','Pip shows you a sketch of Tank asleep with a pigeon nesting in his beard. It is perfect.'],
+   tank:['Tank, deadpan: "Pigeon shit on my car again. They know what they did."','Tank eats an entire sheet cake in silence, then says "Grandma made it for the church." Long pause. "Don\'t tell her."'],
+   rosa:['"Got pulled over doing ninety on Shore Drive. Cop gave me his number. Married guy. Gross. I kept the number."','"I named my car Diane. After my ex. Because I ride her hard and she still won\'t leave me alone."'],
+   glitch:['"I renamed the Ledger\'s wifi to FBI_Surveillance_Van_3. They\'ve been whispering for two days."','"Rourke\'s password is \'Password1!\'. The exclamation point is doing a lot of heavy lifting."'],
+   pryce:['"My client called the judge a jackass in open court. I argued it was a term of endearment. We won."','"I bill in six-minute increments. This conversation has cost you forty dollars. Worth every penny."'],
+   odette:['"Baby, I\'ve buried two husbands and divorced the third. The third one was the dangerous one."','"Never trust a man who orders a white wine spritzer at a crime summit. Learned that the hard way."'],
+   deacon:['"Lord forgive me, but that man\'s mustache is a goddamn crime."','"Turned the other cheek once. Got punched in that one too. Haven\'t turned it since."'],
+   calloway:['"Your accountant is a fucking idiot. That\'s a technical assessment."','Calloway, not looking up from her book: "Captain Ravenscroft just threw a duke out a window. For love." A beat. "Hot."'],
+   wren:['"Stole a cop\'s handcuffs today. Used them to lock his bike to his partner\'s bike."','Wren hands back your wallet, your keys, and a parking ticket that isn\'t yours. "That one\'s a gift."']};
+  Object.keys(CH).forEach(k=>setOv(PROF[k],'chat',[...PROF[k].chat,...CH[k]]));
+  // ----- Grapevine
+  setOv(FEED_T.rourke,'text',()=>pick(['Funny how a certain neighborhood got real quiet the minute some new punk moved in. I\'m watching your ass.','Somebody in this city thinks they\'re smarter than Norfolk PD. They\'re not. They\'re a dumbass with a nice coat.','Long night. Lot of dirty cash moving around this town. Lot of idiots about to make mistakes.']));
+  setOv(FEED_T.rourke.opts,0,['Reply: "Eat a dick, Rourke."',()=>{addHeat(8);react('risky');S.chr+=1;return 'It gets 4,000 likes. Rourke screenshots it. Charm +1, heat +8.'}]);
+  setOv(FEED_T.review,'make',()=>{const b=pick(ownedFronts());return {biz:b.id,text:`${b.name} took my money AND my patience. The bathroom smelled like a war crime. One star. 😤`}});
+  setOv(FEED_T.review.opts,1,['Reply: "Then take your ass somewhere else, Brenda."',p=>{S.buzz[p.biz]=.8;react('cruel');const b=BIZ.find(x=>x.id===p.biz);return `It goes semi-viral. ${b.name} earns 20% less tonight.`}]);
+}
+const MATURE_POSTS=[
+ {who:'scanner',text:'Units responding to a naked man riding a Lime scooter down Granby. Again. Same guy. Different scooter.'},
+ {who:'ovlocals',text:'To whoever keeps stealing the toilet paper from the Ocean View pier bathroom: it\'s been nine months. Seek help.'},
+ {who:'vibes',text:'Norfolk drivers merge onto 264 like they got a personal beef with God 🙏'},
+ {who:'eats',text:'If your crab cake is mostly breading, you sold me a bread cake, you lying bastards.'},
+ {who:'gossip',text:'Saw two city councilmen fistfighting outside a Waffle House at 3am. Democracy is healing.'},
+ {who:'scanner',text:'Caller reports a raccoon "with a knife" behind the Granby Street 7-Eleven. Units en route. God help us.'},
+ {who:'vibes',text:'The tunnel traffic this morning was so bad I aged into a different tax bracket.'},
+ {who:'gossip',text:'Somebody in Ghent paid a guy $400 to scream at their ex\'s boat. Honestly? Worth it.'}];
+const FIGHT_TAUNTS=['That all you got, you little shit?','Stay down, dumbass.','My grandma hits harder than you, and she\'s dead.','I\'m gonna enjoy this.','You picked the wrong fuckin\' alley.','Get up. I ain\'t done.'];
+
+/* =========================================================
+   GUNS — the back room at Ocean View Pawn
+   ========================================================= */
+const GUNS=[
+ {id:'38',name:'.38 snub-nose revolver',lvl:3,price:1200,dmg:30,acc:.82,per:1,box:[60,12]},
+ {id:'9mm',name:'9mm pistol',lvl:6,price:3500,dmg:38,acc:.86,per:1,box:[90,15]},
+ {id:'shotgun',name:'Pump shotgun',lvl:10,price:9000,dmg:72,acc:.74,per:1,box:[150,8]},
+ {id:'tommy',name:'Tommy gun',lvl:14,price:26000,dmg:34,acc:.7,per:3,box:[400,50]},
+ {id:'gold45',name:'Gold-plated .45',lvl:20,price:125000,dmg:90,acc:.92,per:1,box:[300,10]}];
+const gunOf=()=>S.gun?GUNS.find(g=>g.id===S.gun):null;
+const ammoOf=id=>(S.ammo&&S.ammo[id])||0;
+function gunSection(){
+  let h=`<div class="sec"><div class="sec-head"><h2 class="gilt">Guns</h2><span class="eyebrow">Back room at the pawn shop</span></div>
+   <p class="note">A gun adds a Shoot move to fights and helps on strength jobs and loud heists. Every shot draws heat, and getting booked while carrying adds a gun charge.</p><div class="list">`;
+  GUNS.forEach(g=>{const own=S.guns&&S.guns[g.id],lock=S.lvl<g.lvl,eq=S.gun===g.id;
+    h+=`<div class="row ${lock?'locked':''}"><span class="ico">${icon('gun')}</span><div class="row-main"><div class="row-title">${esc(g.name)}${eq?' <span class="chip good">Carrying</span>':''}</div>
+     <div class="row-sub"><span>${g.dmg} damage${g.per>1?` x${g.per} burst`:''}</span><span>${Math.round(g.acc*100)}% accuracy</span>${own?`<span class="gold">${ammoOf(g.id)} rounds</span>`:lock?`<span>Level ${g.lvl}</span>`:`<span class="gold">${money(g.price)}</span>`}</div></div>
+     <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${lock?'<span class="chip">Locked</span>':own?`${eq?'':`<button class="btn sm ghost" data-act="gunEquip" data-arg="${g.id}">Carry</button>`}<button class="btn sm" data-act="gunAmmo" data-arg="${g.id}" ${!canPay(g.box[0])?'disabled':''}>+${g.box[1]} rounds ${money(g.box[0])}</button>`:`<button class="btn sm" data-act="gunBuy" data-arg="${g.id}" ${!canPay(g.price)?'disabled':''}>Buy</button>`}</div></div>`});
+  if(S.gun)h+=`<div class="row noicon"><div class="row-main"><div class="row-title">Leave the gun at home</div><div class="row-sub"><span>No gun charge if you get booked</span></div></div><button class="btn sm ghost" data-act="gunEquip" data-arg="">Holster</button></div>`;
+  return h+'</div></div>';
+}
+const GUNACT={
+ gunBuy(id){const g=GUNS.find(x=>x.id===id);if(!g||S.lvl<g.lvl||!canPay(g.price))return;pay(g.price);S.guns[id]=true;S.gun=id;S.ammo[id]=(S.ammo[id]||0)+g.box[1];sfx('gun');toast(`${g.name}, ${g.box[1]} rounds. Carrying it now.`);commit()},
+ gunAmmo(id){const g=GUNS.find(x=>x.id===id);if(!canPay(g.box[0]))return;pay(g.box[0]);S.ammo[id]=(S.ammo[id]||0)+g.box[1];sfx('tick');toast(`+${g.box[1]} rounds`);commit()},
+ gunEquip(id){S.gun=id||null;sfx('tick');toast(id?`Carrying the ${GUNS.find(g=>g.id===id).name}`:'Gun stays home');commit()}};
+function shootMove(e,L){
+  const g=gunOf();if(!g||ammoOf(g.id)<1){L.push('Click. Empty.');sfx('whiff');return 0}
+  let tot=0;const n=Math.min(g.per,ammoOf(g.id));
+  for(let k=0;k<n;k++){S.ammo[g.id]--;if(Math.random()<clamp(g.acc+S.stl/500,.3,.97)){const d=Math.max(1,Math.round(g.dmg*(1+S.lvl*.03)*rnd(.85,1.15)-e.def*.3));tot+=d}}
+  e.hp-=tot;fight.shots=(fight.shots||0)+n;addHeat(n>1?3:1.5);S.rec.shots=(S.rec.shots||0)+n;
+  sfx('gun');gunFlash();vib(40);
+  L.push(tot?`${n>1?'You rip off a burst':'You fire'}. ${tot} damage.`:`${n>1?'The whole burst goes':'The shot goes'} wide.`);
+  return tot;
+}
+function gunFlash(){const f=document.createElement('div');f.className='flash gunflash';$('#fx-root').appendChild(f);setTimeout(()=>f.remove(),220);shakeScreen()}
+
+/* =========================================================
    RENDER
    ========================================================= */
 let toastT=null;
@@ -2781,7 +2899,8 @@ function renderMarket(){
   ITEMS.forEach((it,i)=>{h+=`<div class="row"><span class="ico">${icon(it.icon)}</span><div class="row-main"><div class="row-title">${esc(it.name)} <span class="chip">x${S.items[it.id]||0}</span></div><div class="row-sub"><span>${esc(it.desc)}</span><span class="gold">${money(it.price)}</span></div></div>
     <div style="display:flex;gap:6px"><button class="btn sm ghost" data-act="use" data-arg="${it.id}" ${S.items[it.id]?'':'disabled'}>Use</button><button class="btn sm" data-act="buy" data-arg="i|${i}" ${!canPay(it.price)?'disabled':''}>Buy</button></div></div>`});
   h+=`</div></div>`;
-  h+=`<div class="sec"><div class="sec-head"><h2 class="gilt">Weapons</h2><span class="eyebrow">Attack ${Math.round(pAtk())}</span></div><div class="list">${shopRows(WEAPONS,'w',S.weapon,it=>`+${it.atk} attack`,'blade')}</div></div>`;
+  h+=`<div class="sec"><div class="sec-head"><h2 class="gilt">Melee</h2><span class="eyebrow">Attack ${Math.round(pAtk())}</span></div><div class="list">${shopRows(WEAPONS,'w',S.weapon,it=>`+${it.atk} attack`,'blade')}</div></div>`;
+  h+=gunSection();
   h+=`<div class="sec"><div class="sec-head"><h2 class="gilt">Armor</h2><span class="eyebrow">Defense ${Math.round(pDef())}</span></div><div class="list">${shopRows(ARMOR,'a',S.armor,it=>`+${it.def} defense`,'shield')}</div></div>`;
   h+=`<div class="sec"><div class="sec-head"><h2 class="gilt">Tools</h2></div><div class="list">${shopRows(TOOLS,'t',0)}</div></div>`;
   return h;
@@ -2898,6 +3017,7 @@ function renderFight(hitThem,hitYou){
    <div class="moves">
     <button class="btn" data-act="fm" data-arg="strike">Strike</button>
     <button class="btn" data-act="fm" data-arg="heavy">Haymaker</button>
+    ${gunOf()?`<button class="btn red" style="grid-column:1/-1" data-act="fm" data-arg="shoot" ${ammoOf(S.gun)<1?'disabled':''}>Shoot · ${ammoOf(S.gun)?ammoOf(S.gun)+' rounds':'empty'}</button>`:''}
     <button class="btn ghost" data-act="fm" data-arg="guard">Guard</button>
     <button class="btn ghost" data-act="fm" data-arg="med" ${S.items.medkit?'':'disabled'}>Medkit x${S.items.medkit||0}</button>
    </div>
@@ -2932,6 +3052,7 @@ function settingsSheet(){
   modal(`<h2 class="gilt">Settings</h2>
    <div class="toggle"><span>Sound effects</span><button class="switch" role="switch" aria-checked="${settings.sound}" data-act="setSound" aria-label="Sound effects"></button></div>
    <div class="toggle"><span>Music</span><button class="switch" role="switch" aria-checked="${settings.music}" data-act="setMusic" aria-label="Music"></button></div>
+   <div class="toggle"><span>Mature content<br><small class="muted">Strong language, drugs, crude humor</small></span><button class="switch" role="switch" aria-checked="${MT()}" data-act="setMature" aria-label="Mature content"></button></div>
    <div class="toggle"><span>Minigames on jobs</span><button class="switch" role="switch" aria-checked="${settings.mini!==false}" data-act="setMini" aria-label="Minigames on jobs"></button></div>
    <div class="sheet-actions">
     <button class="btn ghost" data-act="howto">How to play</button>
@@ -2953,6 +3074,7 @@ function howto(){
    <p><b>Rivals.</b> Three factions grow stronger every day. Parley, pay tribute, sabotage, hit their crew, ally with them, or wipe them out. Allied leaders join your crew.</p>
    <p><b>You.</b> Train your stats, change your look and buy suits that add Charm.</p>
    <p><b>Grapevine.</b> Every morning your phone shows your bank alert, messages and the feed. Some posts have reply options, and what you say has real effects on heat, rivals, your fronts and your crew. Tap the phone button to reopen it.</p>
+   <p><b>Guns.</b> The back room at the pawn shop, in the Market. A gun adds a Shoot move to fights. Every shot draws heat, and getting booked while carrying adds a gun charge.</p>
    <p><b>Heists.</b> On the Crew tab. Choose quiet, loud or smart, put the best person in each role, and pull off three phases.</p>
    <p><b>The Gilded Ace.</b> In the Market. Blackjack, dice and slots. Winnings are paid as clean money.</p>
    <p><b>Minigames.</b> Pickpocket, lockpick and hacking jobs let you try a timing tap for a sure thing and a bonus. Turn them off in Settings.</p>
@@ -3027,6 +3149,8 @@ const ACT={
  doImport(n){n=+n;const t=decodeSave($('#code-in').value);if(!t)return toast('That code didn\'t work. Check you copied all of it.');
    try{localStorage.setItem(slotKey(n),JSON.stringify(t))}catch(e){return toast('Couldn\'t save on this device.')}
    toast(`Loaded ${t.name} into slot ${n}.`);sfx('buy');if(S&&n===curSlot){S=t;render()}refreshTitle();slotsSheet('load')},
+ ...GUNACT,
+ setMature(){settings.mature=!MT();saveSettings();applyRating();settingsSheet();refreshTitle()},
  dayTap,cheatRun(){const i=$('#cheat-in');if(i)runCheat(i.value)},cheatFill(c){cheatSheet(c);setTimeout(()=>{const i=$('#cheat-in');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},50)},
  quickWash(){const a=Math.min(S.dirty,louLeft());if(a<10)return;const got=Math.round(a*.6);S.dirty-=a;S.clean+=got;S.lou=(S.lou||0)+a;sfx('cash');floatAt('+'+money(got)+' clean','clean');lastResult={good:true,icon:'dice',t:`Lou washed ${money(a)}`,d:`You get ${money(got)} clean. Lou keeps the rest.`};commit()}
 };
@@ -3040,12 +3164,13 @@ document.addEventListener('click',e=>{
   ensureAudio();ACT[a]&&ACT[a](b.getAttribute('data-arg'));
 });
 document.addEventListener('keydown',e=>{if(e.key!=='Enter'||!document.activeElement)return;if(document.activeElement.id==='in-name')ACT.start();if(document.activeElement.id==='cheat-in')ACT.cheatRun()});
-function refreshTitle(){let n=settings.lastSlot||1;if(!readSlot(n))n=SLOTS.find(k=>readSlot(k))||1;const s=readSlot(n);const c=$('#btn-continue');c.hidden=!s;c.dataset.arg=n;if(s)c.textContent=`Continue · ${s.name}, day ${s.day}`;$('#btn-load').hidden=!SLOTS.some(k=>readSlot(k))}
+function refreshTitle(){const rl=$('#rating-line');if(rl)rl.textContent=MT()?'Rated M: strong language, drugs, crude humor, guns. You can tone it down in Settings.':'Mature content is off.';let n=settings.lastSlot||1;if(!readSlot(n))n=SLOTS.find(k=>readSlot(k))||1;const s=readSlot(n);const c=$('#btn-continue');c.hidden=!s;c.dataset.arg=n;if(s)c.textContent=`Continue · ${s.name}, day ${s.day}`;$('#btn-load').hidden=!SLOTS.some(k=>readSlot(k))}
 
 /* =========================================================
    BOOT
    ========================================================= */
 function start(data){
+  applyRating();
   if(/netlify\.app$/.test(location.hostname))document.documentElement.classList.add('hosted');
   $('#title-sky').innerHTML=skyline(3,true);
   refreshTitle();
